@@ -8,6 +8,18 @@ import java.util.Map;
 
 @RestController
 public class HealthController {
+    @GetMapping("/")
+    public ResponseEntity<Map<String, String>> root() {
+        return ResponseEntity.ok(
+                Map.of(
+                        "service", "reporte-pdf",
+                        "status", "ok",
+                        "health", "/health",
+                        "docs", "/doc/swagger-ui.html",
+                        "reportEndpoint", "/api/reporte/pdf"
+                )
+        );
+    }
     @GetMapping("/health")
     public ResponseEntity<Map<String, String>> health() {
         return ResponseEntity.ok(Map.of("status", "ok"));
