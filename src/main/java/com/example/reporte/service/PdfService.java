@@ -1,19 +1,61 @@
 package com.example.reporte.service;
 
+import com.example.reporte.model.MonthlyReport;
+import com.example.reporte.model.Transaction;
+import com.example.reporte.repository.MonthlyReportRepository;
+import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.text.NumberFormat;
+import java.util.List;
 import java.util.Locale;
 
 @Service
+@RequiredArgsConstructor
 public class PdfService {
-    public byte[] buildMonthlyReport(int year, int month, double incomeVal, double expensesVal, Double budgetVal) throws Exception {
+
+    private final MonthlyReportRepository monthlyReportRepository;
+
+    @Transactional
+    public byte[] generateAndSaveReport(String userId, int year, int month, double incomeVal, double expensesVal, Double budgetVal, List<Transaction> transactions) throws Exception {
+        MonthlyReport report = monthlyReportRepository.findByUserIdAndYearAndMonth(userId, year, month)
+                .orElse(MonthlyReport.builder()
+                        .userId(userId)
+                        .year(year)
+                        .month(month)
+                        .build());
+
+        report.setTotalIncome(incomeVal);
+        report.setTotalExpenses(expensesVal);
+        report.setBudgetAmount(budgetVal);
+        
+        if (transactions != null && !transactions.isEmpty()) {
+            report.getTransactions().clear();
+            for (Transaction tx : transactions) {
+                report.addTransaction(tx);
+            }
+        }
+
+        monthlyReportRepository.save(report);
+
+        return buildPdf(report);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] getReportPdf(String userId, int year, int month) throws Exception {
+        MonthlyReport report = monthlyReportRepository.findByUserIdAndYearAndMonth(userId, year, month)
+                .orElseThrow(() -> new RuntimeException("Reporte no encontrado para " + month + "/" + year));
+        return buildPdf(report);
+    }
+
+    private byte[] buildPdf(MonthlyReport report) throws Exception {
         PDDocument doc = new PDDocument();
         PDPage page = new PDPage(PDRectangle.A4);
         doc.addPage(page);
@@ -25,26 +67,44 @@ public class PdfService {
             cs.newLineAtOffset(50, page.getMediaBox().getHeight() - 80);
             cs.showText("Reporte Financiero Mensual");
             cs.newLine();
+            cs.newLine();
 
             cs.setFont(PDType1Font.HELVETICA, 12);
+            cs.showText("Mes: " + String.format("%02d", report.getMonth()) + "/" + report.getYear());
             cs.newLine();
-            cs.showText("Mes: " + String.format("%02d", month) + "/" + year);
             cs.newLine();
 
             NumberFormat nf = NumberFormat.getCurrencyInstance(new Locale("es", "CL"));
-            String income = nf.format(incomeVal);
-            String expenses = nf.format(expensesVal);
-            double balanceVal = incomeVal - expensesVal;
+            String income = nf.format(report.getTotalIncome());
+            String expenses = nf.format(report.getTotalExpenses());
+            double balanceVal = report.getTotalIncome() - report.getTotalExpenses();
             String balance = nf.format(balanceVal);
-            String budget = budgetVal != null ? nf.format(budgetVal) : "No establecido";
+            String budget = report.getBudgetAmount() != null ? nf.format(report.getBudgetAmount()) : "No establecido";
 
-            cs.showText("Ingresos: " + income);
+            cs.showText("Ingresos Totales: " + income);
             cs.newLine();
-            cs.showText("Gastos: " + expenses);
+            cs.showText("Gastos Totales: " + expenses);
             cs.newLine();
             cs.showText("Balance: " + balance);
             cs.newLine();
             cs.showText("Presupuesto: " + budget);
+            cs.newLine();
+            cs.newLine();
+            
+            cs.setFont(PDType1Font.HELVETICA_BOLD, 14);
+            cs.showText("Detalle de Transacciones");
+            cs.newLine();
+            cs.setFont(PDType1Font.HELVETICA, 10);
+            
+            if (report.getTransactions() != null) {
+                for (Transaction tx : report.getTransactions()) {
+                    String type = tx.isIncome() ? "(+)" : "(-)";
+                    String line = String.format("%s %s: %s - %s", type, tx.getTitle(), nf.format(tx.getAmount()), tx.getCategory());
+                    cs.showText(line);
+                    cs.newLine();
+                }
+            }
+
             cs.endText();
         }
 
@@ -52,5 +112,9 @@ public class PdfService {
         doc.save(out);
         doc.close();
         return out.toByteArray();
+    }
+    
+    public byte[] buildMonthlyReport(String userId, int year, int month, double incomeVal, double expensesVal, Double budgetVal) throws Exception {
+        return generateAndSaveReport(userId, year, month, incomeVal, expensesVal, budgetVal, null);
     }
 }
