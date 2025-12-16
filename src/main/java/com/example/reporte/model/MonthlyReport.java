@@ -10,6 +10,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
+
 @Entity
 @Table(name = "monthly_reports", uniqueConstraints = {
     @UniqueConstraint(columnNames = {"user_id", "report_year", "report_month"})
@@ -42,6 +45,8 @@ public class MonthlyReport {
 
     @OneToMany(mappedBy = "monthlyReport", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<Transaction> transactions = new ArrayList<>();
 
     public void addTransaction(Transaction transaction) {

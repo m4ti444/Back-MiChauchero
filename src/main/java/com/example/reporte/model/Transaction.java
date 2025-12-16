@@ -6,6 +6,9 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
+
 @Entity
 @Table(name = "transactions")
 @Data
@@ -29,5 +32,7 @@ public class Transaction {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "monthly_report_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private MonthlyReport monthlyReport;
 }
